@@ -341,5 +341,4 @@ getCausalImpactList <- function(ts_data, events){
   
   ci_list
   
-}     
-
+} 
