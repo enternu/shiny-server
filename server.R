@@ -6,31 +6,48 @@
 #
 
 library(shiny)
+library(shinydashboard)
+library(shinyga)
+
+securityCode <- createCode()
 
 source('functions.R')
 
 ## for the loop over plots
 max_plots <- options()$shinyMulti$max_plots
 
-shinyServer(function(input, output, session) {
-  
-  message(getwd())
-  
-  ga_data <- reactive({
-    
-    ## get your profile ID of your GA account to pull from
-    gadata <- get_ga_data(profileID = options()$rga$profile_id, 
-                          fetch_metrics = "ga:sessions",
-                          fetch_dimensions = "ga:date,ga:medium",
-                          fetch_filter="")
-    
-    # get one column per medium plus a total
-    data <- tidyr::spread(gadata, medium, sessions)
-    data$total <- rowSums(as.matrix(data[,-1]), na.rm=T)
-    
-    data
-    
-  })
+shinyServer(function(input, output, session){
+
+  ## returns list of token and profile.table ----------------------------------
+  auth <- doAuthMacro(input, output, session,
+                      securityCode,
+                      ## client info taken from Google API console.
+                      client.id     = "xxxxx.apps.googleusercontent.com",
+                      client.secret = "xxxxxxxxxxxx",
+                      type = "analytics")
+
+  ## auth returns auth$table() and auth$token() to be used in API calls.
+
+  ## get the GA data ----------------------------------------------------------
+  gadata <- reactive({
+    validate(
+      need(auth$token(), "Authentication needed"))
+
+    df    <- auth$table()
+    token <- auth$token()
+    gaid  <- as.character(input$view)
+
+    profileRow <- df[df$id %in% gaid,] 
+
+    data <- rollupGA(GAProfileTable = profileRow,
+                     dimensions = 'ga:date',
+                     start_date = '2014-09-01',
+                     metrics = 'ga:sessions',
+                     end_date = '2015-03-01',
+                     ga = token)
+
+    data[,c('date','sessions')]
+  }) 
   
   anomalyData <- reactive({
     data <- ga_data()
